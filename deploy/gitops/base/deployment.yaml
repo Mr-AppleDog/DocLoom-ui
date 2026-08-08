@@ -49,8 +49,5 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+          # 不设容器级 securityContext: nginx:alpine 启动需 CAP_CHOWN chown 缓存目录,
+          # drop ALL 会导致 chown 失败崩溃;故此处不放 securityContext。
