@@ -8,7 +8,7 @@ resources:
   - ../../base
 
 # 镜像坐标:base 写逻辑名,这里改写成本地 registry 真实坐标 + 占位 tag。
-# 实际 tag 由 argocd-image-updater 在线覆盖(write-back=argocd)。
+# 实际 tag 由 CI workflow 更新并 force-push 到 deploy/staging 分支(Argo 据此同步)。
 images:
   - name: docloom-ui
     newName: localhost:5000/docloom-ui

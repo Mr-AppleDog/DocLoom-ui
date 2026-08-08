@@ -1,22 +1,24 @@
-name: CI/CD (DocLoom ui)
+name: CI/CD (DocLoom ui, GitOps deploy 分支)
 
+# 推 master 触发;CI 只把部署 tag 写到 deploy/staging 分支,master 保持干净。
 on:
   push:
     branches: [master]
   workflow_dispatch:
 
-# image-updater 模式:CI 只 build + push,不碰 git
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build-publish:
+  build-publish-gitops:
     runs-on: self-hosted
     env:
       IMAGE: localhost:5000/docloom-ui
     steps:
-      - name: 拉代码
+      - name: 拉代码(完整历史)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
 
       - name: 计算镜像 tag
         id: tag
@@ -28,7 +30,46 @@ jobs:
       - name: 推送到本地 registry
         run: docker push $IMAGE:${{ steps.tag.outputs.sha }}
 
-      - name: 等 image-updater 同步并滚动
+      - name: 更新 GitOps 镜像标签
+        env:
+          TAG: ${{ steps.tag.outputs.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          tag = os.environ["TAG"]
+          p = Path("deploy/gitops/overlays/staging/kustomization.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          hit = False
+          for i, line in enumerate(lines):
+              if line.strip().startswith("newTag:"):
+                  indent = line[: len(line) - len(line.lstrip())]
+                  lines[i] = f"{indent}newTag: {tag}"
+                  hit = True
+                  break
+          if not hit:
+              raise SystemExit("ERROR: kustomization.yaml 里找不到 newTag")
+          p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(f"newTag -> {tag}")
+          PY
+
+      - name: 渲染校验
+        run: |
+          export PATH=/usr/local/bin:$PATH
+          kubectl kustomize deploy/gitops/overlays/staging > /tmp/rendered.yaml
+          test -s /tmp/rendered.yaml
+          grep -q "image: localhost:5000/docloom-ui:${{ steps.tag.outputs.sha }}" /tmp/rendered.yaml \
+            || { echo "渲染后镜像未替换为本次 sha"; exit 1; }
+
+      - name: 提交并 force-push 到 deploy/staging
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/gitops/overlays/staging/kustomization.yaml
+          git commit -m "deploy(staging): ${{ steps.tag.outputs.sha }}"
+          git push --force origin HEAD:deploy/staging
+
+      - name: 等 Argo 同步并滚动
         env:
           KUBECONFIG: /home/mrlu/.kube/config
           NEW_IMG: $IMAGE:${{ steps.tag.outputs.sha }}
@@ -37,12 +78,22 @@ jobs:
           for i in $(seq 1 40); do
             CUR=$(kubectl get deployment docloom-ui -n docloom -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)
             if [ "$CUR" = "$NEW_IMG" ]; then
-              echo "image-updater 已切到 $CUR,等滚动完成"
+              echo "Argo 已切到 $CUR,等滚动完成"
               kubectl rollout status deployment/docloom-ui -n docloom --timeout=300s
               exit 0
             fi
-            echo "等待 image-updater 切镜像 (当前=$CUR, 期望=$NEW_IMG) ... ($i/40)"
+            echo "等待 Argo 同步 (当前=$CUR, 期望=$NEW_IMG) ... ($i/40)"
             sleep 15
           done
-          echo "超时:image-updater 10 分钟内未把 deployment 切到新镜像。检查 image-updater 日志 / Argo UI。" >&2
+          echo "超时:Argo 未切换镜像" >&2; exit 1
+
+      - name: 冒烟测试(NodePort 30080)
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://192.168.149.128:30080/ || echo 000)
+            if [ "$code" = "200" ]; then echo "smoke OK (200)"; exit 0; fi
+            sleep 2
+          done
+          echo "smoke: 20s 内 http://192.168.149.128:30080/ 无 200 (last=$code)" >&2
+          kubectl get pods -n docloom -l app=docloom-ui -o wide
           exit 1

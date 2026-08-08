@@ -3,16 +3,12 @@ kind: Application
 metadata:
   name: docloom-ui-staging
   namespace: argocd
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: docloom-ui=localhost:5000/docloom-ui
-    argocd-image-updater.argoproj.io/write-back-method: argocd
-    argocd-image-updater.argoproj.io/update-strategy: latest
-    argocd-image-updater.argoproj.io/force-update: "true"
 spec:
   project: default
   source:
+    # 单仓库 GitOps:Argo 只读 deploy/staging 分支(部署状态分支)的 staging overlay。
     repoURL: https://github.com/Mr-AppleDog/DocLoom-ui.git
-    targetRevision: master
+    targetRevision: deploy/staging
     path: deploy/gitops/overlays/staging
   destination:
     server: https://kubernetes.default.svc
