@@ -2,7 +2,7 @@
   <div class="doc-viewer">
     <div v-if="!view" class="doc-empty">请从左侧选择一篇文档</div>
     <template v-else>
-      <div v-if="view.type === 'md'" class="markdown-body" v-html="rendered"></div>
+      <div v-if="view.type === 'md'" ref="containerRef" class="markdown-body" v-html="rendered"></div>
       <div v-else-if="view.type === 'html'" class="html-body" v-html="rendered"></div>
       <pre v-else-if="view.type === 'text'" class="text-body">{{ view.raw }}</pre>
       <div v-else class="doc-unsupported">
@@ -16,11 +16,17 @@
 import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
+import mermaid from 'mermaid';
 import 'highlight.js/styles/github.css';
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { DocFileViewVO } from '@/api/doc/public';
 
 const props = defineProps<{ view: DocFileViewVO | null }>();
+
+const containerRef = ref<HTMLElement | null>(null);
+
+// mermaid 单例初始化：strict 自带 SVG 输出消毒，安全
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
 
 function escapeHtml(s: string): string {
   return s
@@ -34,6 +40,10 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   highlight(str: string, lang: string): string {
+    // mermaid 围栏：输出占位 div，渲染后由 mermaid.run 替换为 SVG
+    if (lang === 'mermaid') {
+      return `<div class="mermaid">${escapeHtml(str)}</div>`;
+    }
     if (lang && hljs.getLanguage(lang)) {
       try {
         return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
@@ -55,6 +65,20 @@ const rendered = computed<string>(() => {
     return DOMPurify.sanitize(v.html || '');
   }
   return '';
+});
+
+// 渲染结果变化后（文件切换），在 DOM 更新完跑 mermaid，将 .mermaid 占位替换为 SVG
+watch(rendered, () => {
+  nextTick(async () => {
+    if (!containerRef.value) return;
+    const els = containerRef.value.querySelectorAll<HTMLElement>('.mermaid');
+    if (!els.length) return;
+    try {
+      await mermaid.run({ nodes: Array.from(els) });
+    } catch {
+      // 单图语法错忽略，避免阻塞其他图与页面
+    }
+  });
 });
 </script>
 

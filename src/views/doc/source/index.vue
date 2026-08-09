@@ -328,22 +328,51 @@ const handleDelete = async (row?: DocSourceVO) => {
   await getList();
   proxy?.$modal.msgSuccess('删除成功');
 };
-/** 触发同步 */
+/** 触发同步（异步：立即返回，轮询来源状态直到离开"进行中"） */
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
 const handleSync = async (row: DocSourceVO) => {
   syncingId.value = row.id;
   try {
-    const res = await syncSource(row.id);
-    const r = res.data;
-    if (r.lastSyncStatus === '1') {
-      proxy?.$modal.msgSuccess('同步完成：' + (r.lastSyncMsg || '成功'));
-    } else {
-      proxy?.$modal.msgError('同步未完成：' + (r.lastSyncMsg || '失败'));
-    }
+    await syncSource(row.id); // 立即返回"同步任务已提交"
+    proxy?.$modal.msg('同步进行中…');
+    await pollSyncStatus(row); // 轮询状态直到完成/失败/超时
     await getList();
   } finally {
     syncingId.value = null;
   }
 };
+/** 轮询来源同步状态：每 3s 查一次，离开"进行中(2)"即结束 */
+const pollSyncStatus = (row: DocSourceVO) =>
+  new Promise<void>((resolve) => {
+    let n = 0;
+    const max = 40; // 最多约 120s
+    const tick = async () => {
+      n++;
+      try {
+        const res = await getSource(row.id);
+        const d = res.data;
+        const target = sourceList.value.find((s) => s.id === row.id);
+        if (target && d) {
+          target.lastSyncStatus = d.lastSyncStatus;
+          target.lastSyncMsg = d.lastSyncMsg;
+          target.lastSyncTime = d.lastSyncTime;
+          target.fileCount = d.fileCount;
+        }
+        const st = d?.lastSyncStatus;
+        if (st !== '2' || n >= max) {
+          if (st === '1') proxy?.$modal.msgSuccess('同步完成：' + (d?.lastSyncMsg || '成功'));
+          else if (st === '0') proxy?.$modal.msgError('同步未完成：' + (d?.lastSyncMsg || '失败'));
+          else proxy?.$modal.msgWarning('同步仍在进行，请稍后刷新查看');
+          resolve();
+          return;
+        }
+        syncTimer = setTimeout(tick, 3000);
+      } catch {
+        resolve();
+      }
+    };
+    syncTimer = setTimeout(tick, 3000);
+  });
 /** 连通性测试（表单内） */
 const handleTest = async () => {
   await sourceFormRef.value?.validate(async (valid: boolean) => {
@@ -381,5 +410,8 @@ const showTestResult = (r: DocSourceTestVO) => {
 
 onMounted(() => {
   getList();
+});
+onUnmounted(() => {
+  if (syncTimer) clearTimeout(syncTimer);
 });
 </script>

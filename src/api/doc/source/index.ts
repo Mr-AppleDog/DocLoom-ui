@@ -54,8 +54,8 @@ export function testSource(data: DocSourceForm): AxiosPromise<DocSourceTestVO> {
   });
 }
 
-// 触发同步（同步执行，返回更新后的来源含同步状态）
-export function syncSource(sourceId: string | number): AxiosPromise<DocSourceVO> {
+// 触发同步（异步：立即返回提交信息，后台执行；进度经 getSource 轮询来源状态）
+export function syncSource(sourceId: string | number): AxiosPromise<string> {
   return request({
     url: '/doc/sync/' + sourceId,
     method: 'post'
