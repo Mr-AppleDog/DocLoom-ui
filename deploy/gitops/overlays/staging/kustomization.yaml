@@ -12,4 +12,4 @@ resources:
 images:
   - name: docloom-ui
     newName: localhost:5000/docloom-ui
-    newTag: placeholder
+    newTag: sha-75b0e0d
