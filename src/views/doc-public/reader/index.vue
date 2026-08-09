@@ -3,14 +3,21 @@
     <header class="doc-header">
       <span class="title">DocLoom</span>
       <span class="sub" v-if="currentSource"> · {{ currentSource.owner }}/{{ currentSource.repo }}{{ currentSource.path ? '/' + currentSource.path : '' }}</span>
-      <el-input
-        v-model="kw"
-        class="search-input"
-        placeholder="关键字检索文档…"
-        clearable
-        :prefix-icon="Search"
-        @keyup.enter="onSearch"
-      />
+      <div class="header-right">
+        <el-checkbox
+          v-model="searchScopeCurrent"
+          :disabled="sourceId == null"
+          @change="onScopeChange"
+        >仅当前来源</el-checkbox>
+        <el-input
+          v-model="kw"
+          class="search-input"
+          placeholder="关键字检索文档…"
+          clearable
+          :prefix-icon="Search"
+          @keyup.enter="onSearch"
+        />
+      </div>
     </header>
     <div class="doc-main">
       <aside class="doc-aside">
@@ -96,6 +103,8 @@ const searchHits = ref<DocSearchHitVO[]>([]);
 const searchTotal = ref(0);
 const searchPageNum = ref(1);
 const searchPageSize = ref(10);
+// 默认 false = 检索全部公开来源；勾选后仅检索当前选中来源
+const searchScopeCurrent = ref(false);
 
 const treeProps = { label: 'label', children: 'children' };
 
@@ -182,13 +191,21 @@ async function onPageChange(p: number) {
   await doSearch();
 }
 
+async function onScopeChange() {
+  // 切换检索范围后，若已有查询词则立即重搜
+  if (kw.value && kw.value.trim()) {
+    searchPageNum.value = 1;
+    await doSearch();
+  }
+}
+
 async function doSearch() {
   searchDrawer.value = true;
   searching.value = true;
   try {
     const res = await searchPublic({
       kw: kw.value.trim(),
-      sourceId: sourceId.value ?? undefined,
+      sourceId: searchScopeCurrent.value ? (sourceId.value ?? undefined) : undefined,
       pageNum: searchPageNum.value,
       pageSize: searchPageSize.value
     });
@@ -280,9 +297,14 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
   font-size: 13px;
   margin-left: 4px;
 }
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .search-input {
   width: 260px;
-  margin-left: auto;
 }
 .doc-main {
   flex: 1 1 auto;
