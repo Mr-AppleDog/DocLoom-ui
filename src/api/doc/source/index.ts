@@ -53,3 +53,11 @@ export function testSource(data: DocSourceForm): AxiosPromise<DocSourceTestVO> {
     data: data
   });
 }
+
+// 触发同步（同步执行，返回更新后的来源含同步状态）
+export function syncSource(sourceId: string | number): AxiosPromise<DocSourceVO> {
+  return request({
+    url: '/doc/sync/' + sourceId,
+    method: 'post'
+  });
+}

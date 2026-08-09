@@ -79,9 +79,11 @@
         <el-table-column label="文件数" align="center" prop="fileCount" width="80" />
         <el-table-column label="同步状态" align="center" prop="lastSyncStatus" width="90">
           <template #default="scope">
-            <el-tag :type="syncStatusTag(scope.row.lastSyncStatus)">
-              {{ labelOf(syncStatusOptions, scope.row.lastSyncStatus) }}
-            </el-tag>
+            <el-tooltip :content="scope.row.lastSyncMsg || '无同步信息'" placement="top" :disabled="!scope.row.lastSyncMsg">
+              <el-tag :type="syncStatusTag(scope.row.lastSyncStatus)">
+                {{ labelOf(syncStatusOptions, scope.row.lastSyncStatus) }}
+              </el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="最近同步" align="center" prop="lastSyncTime" width="160">
@@ -89,8 +91,9 @@
             <span>{{ scope.row.lastSyncTime ? proxy?.parseTime(scope.row.lastSyncTime) : '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="190" class-name="small-padding fixed-width">
+        <el-table-column label="操作" align="center" width="230" class-name="small-padding fixed-width">
           <template #default="scope">
+            <el-button v-hasPermi="['doc:source:sync']" link type="warning" icon="Refresh" :loading="syncingId === scope.row.id" @click="handleSync(scope.row)">同步</el-button>
             <el-button v-hasPermi="['doc:source:test']" link type="primary" icon="Connection" @click="handleTestRow(scope.row)">测试</el-button>
             <el-button v-hasPermi="['doc:source:edit']" link type="primary" icon="Edit" @click="handleUpdate(scope.row)">修改</el-button>
             <el-button v-hasPermi="['doc:source:remove']" link type="danger" icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
@@ -182,7 +185,7 @@
 </template>
 
 <script setup name="DocSource" lang="ts">
-import { listSource, getSource, delSource, addSource, updateSource, testSource } from '@/api/doc/source';
+import { listSource, getSource, delSource, addSource, updateSource, testSource, syncSource } from '@/api/doc/source';
 import { DocSourceForm, DocSourceQuery, DocSourceTestVO, DocSourceVO } from '@/api/doc/source/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -195,6 +198,7 @@ const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const testLoading = ref(false);
+const syncingId = ref<number | string | null>(null);
 
 const queryFormRef = ref<ElFormInstance>();
 const sourceFormRef = ref<ElFormInstance>();
@@ -323,6 +327,22 @@ const handleDelete = async (row?: DocSourceVO) => {
   await delSource(delIds);
   await getList();
   proxy?.$modal.msgSuccess('删除成功');
+};
+/** 触发同步 */
+const handleSync = async (row: DocSourceVO) => {
+  syncingId.value = row.id;
+  try {
+    const res = await syncSource(row.id);
+    const r = res.data;
+    if (r.lastSyncStatus === '1') {
+      proxy?.$modal.msgSuccess('同步完成：' + (r.lastSyncMsg || '成功'));
+    } else {
+      proxy?.$modal.msgError('同步未完成：' + (r.lastSyncMsg || '失败'));
+    }
+    await getList();
+  } finally {
+    syncingId.value = null;
+  }
 };
 /** 连通性测试（表单内） */
 const handleTest = async () => {

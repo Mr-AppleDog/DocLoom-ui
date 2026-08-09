@@ -12,6 +12,7 @@ export interface DocSourceVO extends BaseEntity {
   syncCron: string;
   lastSyncStatus: string;
   lastSyncTime: string;
+  lastSyncMsg: string;
   fileCount: number;
   remark: string;
   // 注意：不含 githubToken，密钥不下发前端
