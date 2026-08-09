@@ -17,11 +17,11 @@ import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import mermaid from 'mermaid';
-import 'highlight.js/styles/github.css';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { DocFileViewVO } from '@/api/doc/public';
 
 const props = defineProps<{ view: DocFileViewVO | null }>();
+const emit = defineEmits(['toc']);
 
 const containerRef = ref<HTMLElement | null>(null);
 
@@ -80,6 +80,21 @@ watch(rendered, () => {
       }
     }
     containerRef.value.querySelectorAll('pre').forEach(attachCopyButton);
+    // 标题加锚点 id + 上报 TOC
+    const heads = containerRef.value.querySelectorAll<HTMLElement>('h1, h2, h3, h4');
+    const list: { id: string; level: number; text: string }[] = [];
+    const used = new Set<string>();
+    heads.forEach((h) => {
+      const text = (h.textContent || '').trim();
+      let id = text.toLowerCase().replace(/[^\w一-龥]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+      let uid = id;
+      let n = 2;
+      while (used.has(uid)) uid = `${id}-${n++}`;
+      used.add(uid);
+      h.id = uid;
+      list.push({ id: uid, level: Number(h.tagName.slice(1)), text });
+    });
+    emit('toc', list);
   });
 });
 
@@ -136,6 +151,16 @@ async function copyCode(btn: HTMLButtonElement, pre: HTMLElement) {
   font-size: 15.5px;
   line-height: 1.78;
   word-break: break-word;
+}
+.doc-viewer :deep(.markdown-body h1),
+.doc-viewer :deep(.markdown-body h2),
+.doc-viewer :deep(.markdown-body h3),
+.doc-viewer :deep(.markdown-body h4),
+.doc-viewer :deep(.html-body h1),
+.doc-viewer :deep(.html-body h2),
+.doc-viewer :deep(.html-body h3),
+.doc-viewer :deep(.html-body h4) {
+  scroll-margin-top: 16px;
 }
 .doc-empty,
 .doc-unsupported {
@@ -217,7 +242,6 @@ async function copyCode(btn: HTMLButtonElement, pre: HTMLElement) {
 }
 .doc-viewer :deep(.markdown-body pre),
 .doc-viewer :deep(.html-body pre) {
-  background: var(--dl-cloth-2);
   border: 1px solid var(--dl-selvedge);
   padding: 14px 16px;
   border-radius: var(--app-radius-md);
@@ -254,7 +278,7 @@ async function copyCode(btn: HTMLButtonElement, pre: HTMLElement) {
 .doc-viewer :deep(.markdown-body pre code),
 .doc-viewer :deep(.html-body pre code) {
   background: transparent;
-  color: var(--dl-link);
+  color: inherit;
   padding: 0;
   font-size: 13px;
 }
@@ -307,22 +331,6 @@ async function copyCode(btn: HTMLButtonElement, pre: HTMLElement) {
   border: 0;
   border-top: 1px solid var(--dl-selvedge);
   margin: 1.6em 0;
-}
-
-/* 暗色：代码块走深色面，链接/标记保持靛蓝 */
-:global(html.dark) .doc-viewer :deep(.markdown-body pre),
-:global(html.dark) .doc-viewer :deep(.html-body pre),
-:global(html.dark) .doc-viewer :deep(.text-body) {
-  background: #0b1119;
-  border-color: var(--dl-selvedge);
-}
-:global(html.dark) .doc-viewer :deep(.markdown-body pre code),
-:global(html.dark) .doc-viewer :deep(.html-body pre code) {
-  color: #e6e9f0;
-}
-:global(html.dark) .doc-viewer :deep(.markdown-body code),
-:global(html.dark) .doc-viewer :deep(.html-body code) {
-  background: var(--dl-cloth-2);
 }
 
 @media (max-width: 640px) {
