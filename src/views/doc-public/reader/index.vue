@@ -3,6 +3,14 @@
     <header class="doc-header">
       <span class="title">DocLoom</span>
       <span class="sub" v-if="currentSource"> · {{ currentSource.owner }}/{{ currentSource.repo }}{{ currentSource.path ? '/' + currentSource.path : '' }}</span>
+      <el-input
+        v-model="kw"
+        class="search-input"
+        placeholder="关键字检索文档…"
+        clearable
+        :prefix-icon="Search"
+        @keyup.enter="onSearch"
+      />
     </header>
     <div class="doc-main">
       <aside class="doc-aside">
@@ -33,13 +41,42 @@
         <DocViewer :view="view" />
       </section>
     </div>
+
+    <el-drawer v-model="searchDrawer" title="检索结果" direction="rtl" size="460px" :close-on-click-modal="true">
+      <div v-loading="searching" class="search-body">
+        <el-empty v-if="!searching && !searchHits.length" description="无命中" :image-size="56" />
+        <div
+          v-for="(hit, i) in searchHits"
+          :key="(hit.docFileId ?? '') + '_' + i"
+          class="hit-item"
+          @click="openHit(hit)"
+        >
+          <div class="hit-name">{{ hit.name }}</div>
+          <div class="hit-meta">{{ hit.sourceName }} · {{ hit.path }}</div>
+          <div class="hit-frag" v-if="hit.fragment" v-html="safeFrag(hit.fragment)"></div>
+        </div>
+        <div v-if="searchTotal > searchPageSize" class="search-pager">
+          <el-pagination
+            background
+            small
+            layout="prev, pager, next"
+            :total="searchTotal"
+            :page-size="searchPageSize"
+            :current-page="searchPageNum"
+            @current-change="onPageChange"
+          />
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
-import { listPublicSources, listPublicFiles, viewPublicFile } from '@/api/doc/public';
-import type { PublicSourceVO, PublicFileVO, DocFileViewVO } from '@/api/doc/public';
+import { Search } from '@element-plus/icons-vue';
+import DOMPurify from 'dompurify';
+import { listPublicSources, listPublicFiles, viewPublicFile, searchPublic } from '@/api/doc/public';
+import type { PublicSourceVO, PublicFileVO, DocFileViewVO, DocSearchHitVO } from '@/api/doc/public';
 import DocViewer from '../components/DocViewer.vue';
 
 const route = useRoute();
@@ -51,6 +88,14 @@ const currentSource = ref<PublicSourceVO | null>(null);
 const treeData = ref<TreeNode[]>([]);
 const activeFileId = ref<number | string | null>(null);
 const view = ref<DocFileViewVO | null>(null);
+
+const kw = ref('');
+const searchDrawer = ref(false);
+const searching = ref(false);
+const searchHits = ref<DocSearchHitVO[]>([]);
+const searchTotal = ref(0);
+const searchPageNum = ref(1);
+const searchPageSize = ref(10);
 
 const treeProps = { label: 'label', children: 'children' };
 
@@ -121,6 +166,57 @@ async function selectFile(fileId: number | string) {
   }
 }
 
+async function onSearch() {
+  if (!kw.value || !kw.value.trim()) {
+    searchHits.value = [];
+    searchTotal.value = 0;
+    searchDrawer.value = true;
+    return;
+  }
+  searchPageNum.value = 1;
+  await doSearch();
+}
+
+async function onPageChange(p: number) {
+  searchPageNum.value = p;
+  await doSearch();
+}
+
+async function doSearch() {
+  searchDrawer.value = true;
+  searching.value = true;
+  try {
+    const res = await searchPublic({
+      kw: kw.value.trim(),
+      sourceId: sourceId.value ?? undefined,
+      pageNum: searchPageNum.value,
+      pageSize: searchPageSize.value
+    });
+    searchHits.value = res.rows || [];
+    searchTotal.value = res.total || 0;
+  } catch {
+    searchHits.value = [];
+    searchTotal.value = 0;
+  } finally {
+    searching.value = false;
+  }
+}
+
+async function openHit(hit: DocSearchHitVO) {
+  searchDrawer.value = false;
+  if (hit.sourceId != null && String(hit.sourceId) !== String(sourceId.value)) {
+    sourceId.value = hit.sourceId;
+    await loadSource(hit.sourceId);
+  }
+  if (hit.docFileId != null) {
+    await selectFile(hit.docFileId);
+  }
+}
+
+function safeFrag(f: string): string {
+  return f ? DOMPurify.sanitize(f, { ALLOWED_TAGS: ['mark'] }) : '';
+}
+
 function firstFile(nodes: TreeNode[]): TreeNode | null {
   for (const n of nodes) {
     if (n.fileId != null) return n;
@@ -184,6 +280,10 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
   font-size: 13px;
   margin-left: 4px;
 }
+.search-input {
+  width: 260px;
+  margin-left: auto;
+}
 .doc-main {
   flex: 1 1 auto;
   display: flex;
@@ -224,5 +324,44 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
 .tree-node.is-active {
   color: #409eff;
   font-weight: 600;
+}
+.search-body {
+  min-height: 120px;
+}
+.hit-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.hit-item:hover {
+  background: #f5f7fa;
+}
+.hit-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+.hit-meta {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+.hit-frag {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.6;
+}
+.hit-frag :deep(mark) {
+  background: #fff3bf;
+  color: #d48806;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.search-pager {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
 }
 </style>

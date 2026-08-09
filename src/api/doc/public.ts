@@ -56,3 +56,39 @@ export function viewPublicFile(id: string | number): AxiosPromise<DocFileViewVO>
     method: 'get'
   });
 }
+
+// 文档检索命中
+export interface DocSearchHitVO {
+  docFileId: number | string;
+  sourceId: number | string;
+  sourceName: string;
+  path: string;
+  name: string;
+  ext: string;
+  fragment: string;
+  score: number | null;
+}
+
+// TableDataInfo 响应（后端按全局列表约定未用 R 包装，直接返回）
+export interface TableResult<T> {
+  rows: T[];
+  total: number;
+  code: number;
+  msg: string;
+}
+
+export interface SearchPublicParams {
+  kw: string;
+  sourceId?: number | string;
+  pageNum?: number;
+  pageSize?: number;
+}
+
+// 公开检索（匿名；ES 不可用降级 MySQL LIKE；仅检索公开来源）
+export function searchPublic(params: SearchPublicParams): Promise<TableResult<DocSearchHitVO>> {
+  return request({
+    url: '/doc/public/search',
+    method: 'get',
+    params
+  }) as unknown as Promise<TableResult<DocSearchHitVO>>;
+}
