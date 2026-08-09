@@ -17,7 +17,8 @@
     </header>
     <div class="dl-reader__main">
       <aside class="dl-warp">
-        <el-select v-model="sourceId" placeholder="选择文档来源" filterable class="dl-source" @change="onSourceChange">
+        <el-select v-model="sourceId" placeholder="选择文档来源" filterable popper-class="dl-source-popper" class="dl-source" @change="onSourceChange">
+          <template #prefix><svg-icon icon-class="documentation" class="dl-source__icon" /></template>
           <el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
         <div class="dl-warp__tree">
@@ -384,21 +385,67 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
   background: var(--dl-cloth-2);
 }
 .dl-source {
-  margin: 14px 14px 6px;
+  margin: 12px 12px 8px;
+  --el-color-primary: var(--dl-accent);
 }
-.dl-source :deep(.el-input__wrapper) {
+.dl-source :deep(.el-select__wrapper) {
+  background: var(--dl-cloth);
   box-shadow: 0 0 0 1px var(--dl-selvedge) inset;
   border-radius: var(--app-radius-md);
+  padding: 2px 10px;
+  min-height: 40px;
+}
+.dl-source :deep(.el-select__wrapper:hover),
+.dl-source :deep(.el-select__wrapper:focus-within) {
+  box-shadow: 0 0 0 1.5px var(--dl-accent) inset;
+}
+.dl-source :deep(.el-select__selected-item) {
+  font-family: var(--dl-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--dl-link);
+}
+.dl-source :deep(.el-select__placeholder) {
+  font-family: var(--dl-body);
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--dl-weft);
+}
+.dl-source__icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  color: var(--dl-accent);
+}
+.dl-source :deep(.el-select__caret) {
+  color: var(--dl-weft);
 }
 .dl-warp__tree {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dl-selvedge) transparent;
   padding: 8px 10px 24px;
+}
+.dl-warp__tree::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dl-warp__tree::-webkit-scrollbar-thumb {
+  background: var(--dl-selvedge);
+  border-radius: 4px;
+}
+.dl-warp__tree::-webkit-scrollbar-thumb:hover {
+  background: var(--dl-weft);
+}
+.dl-warp__tree::-webkit-scrollbar-track {
+  background: transparent;
 }
 .dl-warp__tree :deep(.el-tree) {
   background: transparent;
+  overflow-x: hidden;
   --el-tree-node-hover-bg-color: transparent;
 }
 .dl-warp__tree :deep(.el-tree-node__content) {
@@ -533,5 +580,22 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
   * {
     transition: none !important;
   }
+}
+</style>
+
+<!-- popper 被 teleport 到 body，scoped 够不到，单独全局块覆盖蓝色选中项 -->
+<style>
+.dl-source-popper.el-popper {
+  --el-color-primary: var(--dl-accent);
+  --el-color-primary-light-9: rgba(142, 58, 43, 0.08);
+}
+.dl-source-popper .el-select-dropdown__item.is-selected,
+.dl-source-popper .el-select-dropdown__item.selected {
+  color: var(--dl-accent);
+  font-weight: 600;
+}
+.dl-source-popper .el-select-dropdown__item.is-selected.is-hovering,
+.dl-source-popper .el-select-dropdown__item.selected:hover {
+  background-color: rgba(142, 58, 43, 0.08);
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <div class="dl-login">
-    <!-- 织布面板：签名元素（CSS 经纬交织） -->
+    <!-- 品牌面板 -->
     <aside class="dl-loom-panel">
       <div class="dl-loom-panel__inner">
         <span class="dl-brand__mark">DocLoom</span>
@@ -18,8 +18,8 @@
         <lang-select />
       </div>
 
+      <div class="dl-form-mid">
       <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
-        <p class="dl-form-side__sub">{{ title }}</p>
         <el-form-item v-if="tenantEnabled" prop="tenantId">
           <el-select v-model="loginForm.tenantId" filterable :placeholder="proxy.$t('login.selectPlaceholder')" style="width: 100%">
             <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"></el-option>
@@ -43,13 +43,12 @@
             <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
           </el-input>
         </el-form-item>
-        <el-form-item v-if="captchaEnabled" prop="code">
+        <el-form-item v-if="captchaEnabled" prop="code" class="dl-captcha">
           <el-input
             v-model="loginForm.code"
             size="large"
             auto-complete="off"
             :placeholder="proxy.$t('login.code')"
-            style="width: 63%"
             @keyup.enter="handleLogin"
           >
             <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
@@ -86,6 +85,7 @@
           </div>
         </el-form-item>
       </el-form>
+      </div>
 
       <div class="el-login-footer">
         <span>Copyright © 2018-2026 疯狂的狮子Li All Rights Reserved.</span>
@@ -105,7 +105,6 @@ import { useI18n } from 'vue-i18n';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
-const title = import.meta.env.VITE_APP_TITLE;
 const userStore = useUserStore();
 const router = useRouter();
 const { t } = useI18n();
@@ -312,18 +311,20 @@ onMounted(() => {
 .dl-form-side__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 8px;
+}
+.dl-brand--sm {
+  display: none;
 }
 .dl-brand--sm .dl-brand__mark {
   font-size: 22px;
   color: var(--dl-link);
 }
-.dl-form-side__sub {
-  margin: 4px 0 22px;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--dl-weft);
+.dl-form-mid {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
 }
 
 .login-form {
@@ -340,10 +341,8 @@ onMounted(() => {
   background: var(--dl-cloth-2);
   box-shadow: 0 0 0 1px var(--dl-selvedge) inset;
   border-radius: var(--app-radius-md);
-  transition: box-shadow 0.18s ease;
 }
-.login-form :deep(.el-input__wrapper.is-focus),
-.login-form :deep(.el-input__wrapper:hover) {
+.login-form :deep(.el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1.5px var(--dl-accent) inset;
 }
 .login-form :deep(.el-form-item__error) {
@@ -398,11 +397,20 @@ onMounted(() => {
   color: var(--dl-accent);
 }
 
+.dl-captcha :deep(.el-form-item__content) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dl-captcha :deep(.el-input) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
 .login-code {
-  width: calc(37% - 10px);
+  flex: 0 0 124px;
+  width: 124px;
   height: 44px;
-  float: right;
-  margin-left: 10px;
   box-sizing: border-box;
   border-radius: var(--app-radius-sm);
   overflow: hidden;
@@ -410,7 +418,6 @@ onMounted(() => {
   border: 1px solid var(--dl-selvedge);
   img {
     cursor: pointer;
-    vertical-align: middle;
     display: block;
     width: 100%;
     height: 44px;
@@ -444,7 +451,14 @@ onMounted(() => {
     padding: 36px 22px 0;
     align-items: center;
   }
+  .dl-brand--sm {
+    display: block;
+  }
+  .dl-form-side__head {
+    justify-content: space-between;
+  }
   .dl-form-side__head,
+  .dl-form-mid,
   .login-form,
   .el-login-footer {
     width: 100%;
