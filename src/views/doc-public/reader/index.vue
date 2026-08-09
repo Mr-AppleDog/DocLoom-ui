@@ -1,30 +1,26 @@
 <template>
-  <div class="doc-reader">
-    <header class="doc-header">
-      <span class="title">DocLoom</span>
-      <span class="sub" v-if="currentSource"> · {{ currentSource.owner }}/{{ currentSource.repo }}{{ currentSource.path ? '/' + currentSource.path : '' }}</span>
-      <div class="header-right">
-        <el-checkbox
-          v-model="searchScopeCurrent"
-          :disabled="sourceId == null"
-          @change="onScopeChange"
-        >仅当前来源</el-checkbox>
+  <div class="dl-reader">
+    <header class="dl-reader__head">
+      <span class="dl-reader__brand">DocLoom</span>
+      <div class="dl-search">
         <el-input
+          ref="searchInputRef"
           v-model="kw"
-          class="search-input"
-          placeholder="关键字检索文档…"
-          clearable
+          class="dl-search__input"
           :prefix-icon="Search"
+          placeholder="搜索文档"
           @keyup.enter="onSearch"
         />
+        <kbd class="dl-search__kbd" aria-hidden="true">Ctrl K</kbd>
       </div>
+      <span class="dl-reader__path" v-if="currentSource">{{ currentSource.owner }}/{{ currentSource.repo }}{{ currentSource.path ? '/' + currentSource.path : '' }}</span>
     </header>
-    <div class="doc-main">
-      <aside class="doc-aside">
-        <el-select v-model="sourceId" placeholder="选择文档来源" filterable class="source-select" @change="onSourceChange">
+    <div class="dl-reader__main">
+      <aside class="dl-warp">
+        <el-select v-model="sourceId" placeholder="选择文档来源" filterable class="dl-source" @change="onSourceChange">
           <el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
-        <div class="tree-wrap">
+        <div class="dl-warp__tree">
           <el-tree
             v-if="treeData.length"
             :data="treeData"
@@ -35,7 +31,7 @@
             @node-click="onNodeClick"
           >
             <template #default="{ data }">
-              <span class="tree-node" :class="{ 'is-active': data.fileId != null && data.fileId === activeFileId }">
+              <span class="dl-warp__node" :class="{ 'is-active': data.fileId != null && data.fileId === activeFileId }" :title="data.label">
                 {{ data.label }}
               </span>
             </template>
@@ -43,26 +39,34 @@
           <el-empty v-else description="暂无文档（来源未同步或为空）" :image-size="64" />
         </div>
       </aside>
-      <section class="doc-section">
-        <div class="file-path" v-if="view">{{ view.path }}</div>
+      <section class="dl-cloth-area">
+        <div class="dl-weft" v-if="view">{{ view.path }}</div>
         <DocViewer :view="view" />
       </section>
     </div>
 
+    <footer class="dl-reader__foot">
+      <span>DocLoom</span>
+    </footer>
+
     <el-drawer v-model="searchDrawer" title="检索结果" direction="rtl" size="460px" :close-on-click-modal="true">
-      <div v-loading="searching" class="search-body">
+      <div class="dl-search-toolbar">
+        <el-switch v-model="searchScopeCurrent" :disabled="sourceId == null" style="--el-switch-on-color: var(--dl-accent)" @change="onScopeChange" />
+        <span class="dl-search-toolbar__txt">仅当前来源</span>
+      </div>
+      <div v-loading="searching" class="dl-search-body">
         <el-empty v-if="!searching && !searchHits.length" description="无命中" :image-size="56" />
         <div
           v-for="(hit, i) in searchHits"
           :key="(hit.docFileId ?? '') + '_' + i"
-          class="hit-item"
+          class="dl-hit"
           @click="openHit(hit)"
         >
-          <div class="hit-name">{{ hit.name }}</div>
-          <div class="hit-meta">{{ hit.sourceName }} · {{ hit.path }}</div>
-          <div class="hit-frag" v-if="hit.fragment" v-html="safeFrag(hit.fragment)"></div>
+          <div class="dl-hit__name">{{ hit.name }}</div>
+          <div class="dl-hit__meta">{{ hit.sourceName }} · {{ hit.path }}</div>
+          <div class="dl-hit__frag" v-if="hit.fragment" v-html="safeFrag(hit.fragment)"></div>
         </div>
-        <div v-if="searchTotal > searchPageSize" class="search-pager">
+        <div v-if="searchTotal > searchPageSize" class="dl-search-pager">
           <el-pagination
             background
             small
@@ -103,8 +107,8 @@ const searchHits = ref<DocSearchHitVO[]>([]);
 const searchTotal = ref(0);
 const searchPageNum = ref(1);
 const searchPageSize = ref(10);
-// 默认 false = 检索全部公开来源；勾选后仅检索当前选中来源
 const searchScopeCurrent = ref(false);
+const searchInputRef = ref<any>(null);
 
 const treeProps = { label: 'label', children: 'children' };
 
@@ -116,6 +120,7 @@ interface TreeNode {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKeydown);
   try {
     const res = await listPublicSources();
     sources.value = res.data;
@@ -131,6 +136,10 @@ onMounted(async () => {
   if (sourceId.value != null) {
     await loadSource(sourceId.value);
   }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKeydown);
 });
 
 async function onSourceChange(id: any) {
@@ -175,11 +184,16 @@ async function selectFile(fileId: number | string) {
   }
 }
 
+async function onScopeChange() {
+  // 切换检索范围后，若已有查询词则立即重搜
+  if (kw.value && kw.value.trim()) {
+    searchPageNum.value = 1;
+    await doSearch();
+  }
+}
+
 async function onSearch() {
   if (!kw.value || !kw.value.trim()) {
-    searchHits.value = [];
-    searchTotal.value = 0;
-    searchDrawer.value = true;
     return;
   }
   searchPageNum.value = 1;
@@ -191,15 +205,17 @@ async function onPageChange(p: number) {
   await doSearch();
 }
 
-async function onScopeChange() {
-  // 切换检索范围后，若已有查询词则立即重搜
-  if (kw.value && kw.value.trim()) {
-    searchPageNum.value = 1;
-    await doSearch();
-  }
+/** Ctrl/⌘ + K：聚焦搜索框 */
+function openSearch() {
+  searchInputRef.value?.focus();
+  searchInputRef.value?.select?.();
 }
-
-async function doSearch() {
+function onGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    openSearch();
+  }
+}async function doSearch() {
   searchDrawer.value = true;
   searching.value = true;
   try {
@@ -272,118 +288,250 @@ function buildTree(files: PublicFileVO[]): TreeNode[] {
 </script>
 
 <style scoped>
-.doc-reader {
+.dl-reader {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #fff;
+  background: var(--dl-cloth);
+  font-family: var(--dl-body);
+  color: var(--dl-link);
 }
-.doc-header {
-  height: 52px;
-  flex: 0 0 52px;
+.dl-reader__head {
+  flex: 0 0 auto;
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  border-bottom: 1px solid #ebeef5;
-  background: #fff;
+  gap: 14px;
+  height: 54px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--dl-selvedge);
+  background: var(--dl-cloth);
 }
-.doc-header .title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #303133;
+.dl-reader__brand {
+  font-family: var(--dl-display);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--dl-link);
 }
-.doc-header .sub {
-  color: #909399;
-  font-size: 13px;
-  margin-left: 4px;
-}
-.header-right {
+.dl-reader__path {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-family: var(--dl-mono);
+  font-size: 12px;
+  color: var(--dl-weft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 30%;
 }
-.search-input {
-  width: 260px;
+.dl-search {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, 40vw);
 }
-.doc-main {
+.dl-search__input {
+  width: 100%;
+}
+.dl-search__input :deep(.el-input__wrapper) {
+  background: var(--dl-cloth-2);
+  box-shadow: 0 0 0 1px var(--dl-selvedge) inset;
+  border-radius: var(--app-radius-md);
+  padding-right: 60px;
+}
+.dl-search__input :deep(.el-input__wrapper.is-focus) {
+  background: var(--dl-cloth);
+  box-shadow: 0 0 0 1.5px var(--dl-accent) inset;
+}
+.dl-search__input :deep(.el-input__inner) {
+  height: 38px;
+  font-size: 14px;
+}
+.dl-search__input :deep(.el-input__prefix) {
+  color: var(--dl-weft);
+  margin-right: 4px;
+}
+.dl-search__kbd {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--dl-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border: 1px solid var(--dl-selvedge);
+  border-radius: 5px;
+  background: var(--dl-cloth);
+  color: var(--dl-weft);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.dl-reader__main {
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
 }
-.doc-aside {
+.dl-warp {
   flex: 0 0 300px;
-  border-right: 1px solid #ebeef5;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  border-right: 1px solid var(--dl-selvedge);
+  background: var(--dl-cloth-2);
 }
-.source-select {
-  margin: 12px;
+.dl-source {
+  margin: 14px 14px 6px;
 }
-.tree-wrap {
+.dl-source :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--dl-selvedge) inset;
+  border-radius: var(--app-radius-md);
+}
+.dl-warp__tree {
   flex: 1 1 auto;
-  overflow: auto;
-  padding: 4px 8px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 8px 10px 24px;
 }
-.doc-section {
+.dl-warp__tree :deep(.el-tree) {
+  background: transparent;
+  --el-tree-node-hover-bg-color: transparent;
+}
+.dl-warp__tree :deep(.el-tree-node__content) {
+  height: 34px;
+}
+.dl-warp__node {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 4px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--dl-link);
+  user-select: none;
+}
+.dl-warp__node:hover {
+  color: var(--dl-accent);
+}
+.dl-warp__node.is-active {
+  color: var(--dl-accent);
+  font-weight: 600;
+}
+
+.dl-cloth-area {
   flex: 1 1 auto;
   overflow: auto;
   min-width: 0;
+  background: var(--dl-cloth);
 }
-.file-path {
-  padding: 10px 28px;
+.dl-weft {
+  padding: 9px 34px;
+  font-family: var(--dl-mono);
   font-size: 12px;
-  color: #909399;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  color: var(--dl-weft);
+  border-bottom: 1px solid var(--dl-selvedge);
+  background: transparent;
 }
-.tree-node {
-  font-size: 14px;
-  color: #303133;
-  user-select: none;
+
+.dl-reader__foot {
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dl-cloth-2);
+  border-top: 1px solid var(--dl-selvedge);
+  color: var(--dl-weft);
+  font-size: 12px;
 }
-.tree-node.is-active {
-  color: #409eff;
-  font-weight: 600;
-}
-.search-body {
+
+/* 检索抽屉 */
+.dl-search-body {
   min-height: 120px;
 }
-.hit-item {
+.dl-search-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 0 4px 12px;
+}
+.dl-search-toolbar__txt {
+  font-size: 13px;
+  color: var(--dl-weft);
+  user-select: none;
+}
+.dl-hit {
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--dl-selvedge);
   cursor: pointer;
-  transition: background 0.15s;
 }
-.hit-item:hover {
-  background: #f5f7fa;
+.dl-hit:hover {
+  background: var(--dl-cloth-2);
 }
-.hit-name {
+.dl-hit__name {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--dl-link);
   margin-bottom: 4px;
 }
-.hit-meta {
+.dl-hit__meta {
+  font-family: var(--dl-mono);
   font-size: 12px;
-  color: #909399;
+  color: var(--dl-weft);
   margin-bottom: 6px;
+  word-break: break-all;
 }
-.hit-frag {
+.dl-hit__frag {
   font-size: 13px;
-  color: #606266;
+  color: var(--dl-weft);
   line-height: 1.6;
 }
-.hit-frag :deep(mark) {
-  background: #fff3bf;
-  color: #d48806;
+.dl-hit__frag :deep(mark) {
+  background: rgba(142, 58, 43, 0.16);
+  color: var(--dl-accent);
   padding: 0 2px;
   border-radius: 2px;
 }
-.search-pager {
+.dl-search-pager {
   display: flex;
   justify-content: center;
   padding: 16px 0;
+}
+
+@media (max-width: 860px) {
+  .dl-warp {
+    flex: 0 0 240px;
+  }
+  .dl-search {
+    width: min(280px, 42vw);
+  }
+}
+@media (max-width: 640px) {
+  .dl-reader__path {
+    display: none;
+  }
+  .dl-warp {
+    display: none;
+  }
+  .dl-search {
+    position: static;
+    transform: none;
+    width: auto;
+    flex: 1 1 auto;
+    margin: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 </style>

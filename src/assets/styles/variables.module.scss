@@ -45,6 +45,19 @@
   --el-box-shadow-light: var(--app-shadow-sm);
   --el-box-shadow: var(--app-shadow-md);
   --el-bg-color-page: #f5f7fb;
+
+  // DocLoom — book/manual: neutral paper + ink + madder accent + serif display.
+  // 逃 AI 味：靛蓝→茜染、Space Grotesk→Source Serif、去装饰网格/微交互/概念双关。
+  --dl-link: #1a1a18;       // 墨：正文与标题（近黑微暖，如印刷油墨）
+  --dl-accent: #8e3a2b;      // 茜染：链接/当前/焦点（madder，非靛蓝 AI 默认、非赭石）
+  --dl-weft: #676660;       // 次·暖灰
+  --dl-cloth: #f7f7f5;      // 纸面：阅读底（中性，非奶油、非冷灰）
+  --dl-loom: #15140f;       // 暗纸：深色底（暖黑，非蓝黑）
+  --dl-selvedge: #e2e1dc;   // 纸边：分隔
+  --dl-cloth-2: #eeece7;    // 次级面（侧栏/代码底）
+  --dl-display: 'Source Serif 4', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+  --dl-body: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --dl-mono: ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html.dark {
@@ -310,6 +323,15 @@ html.dark {
 
   // ele
   --brder-color: #37373a;
+
+  // DocLoom — book/manual (dark)
+  --dl-link: #e8e6df;      // 浅墨文本
+  --dl-accent: #b7705a;    // 暗色下茜染（柔和，非亮朱）
+  --dl-weft: #9a968a;
+  --dl-cloth: #15140f;
+  --dl-loom: #0d0c08;
+  --dl-selvedge: #2a2820;
+  --dl-cloth-2: #1c1b15;
 }
 
 // base color
